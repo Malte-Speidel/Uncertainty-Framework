@@ -5,7 +5,7 @@
 /tuning_results/
 results.tar.zst
 pyproject.toml
-/pyhton_logs/
+/python_logs/
 /data/
 
 # Environment
