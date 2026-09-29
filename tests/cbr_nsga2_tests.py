@@ -1,17 +1,21 @@
-"""This module contains tests for the CB_Resampling NSGA-II class."""
+"""This module contains tests for the CBR_NSGA2 class."""
 # Make other project modules accessible
 import sys
 import os
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), ".."))
 
-# Logging config
-from config.logging_config import setup_logging
+import unittest
+import tempfile
+import pickle
+
+# Package imports
+import numpy as np
 
 # CBR-NSGA2 import
 from src.algorithms.resampling_adaptations.cbr_nsga2 import CBR_NSGA2
 
 # CBR Callback import
-from callbacks.cbr_callback import CBR_Callback
+from src.callbacks.cbr_callback import CBR_Callback
 
 # Problem import
 from src.problems.noisy_zdt import NZDT1
@@ -19,32 +23,34 @@ from src.problems.noisy_zdt import NZDT1
 # Pymoo imports
 from pymoo.optimize import minimize
 
-# Pickle import
-import pickle
+class TestCbrNsga2(unittest.TestCase):
 
-# Set up logging
-setup_logging()
+    def setUp(self):
+        self.problem = NZDT1(noise_std=0.6)
+        self.algorithm = CBR_NSGA2(resampling_threshold=0.5)
+        self.callback = CBR_Callback()
 
-# Create algorithm instance
-algo_instance = CBR_NSGA2(resampling_threshold=0.5)
+    def test_minimize_collects_metrics(self):
+        result = minimize(
+            problem=self.problem,
+            algorithm=self.algorithm,
+            termination=("n_eval", 10000),
+            callback=self.callback
+        )
 
-print("Creating CBR_NSGA-II: [X]")
+        assert result.X is not None, "Minimize did not return any decision variables."
+        assert len(self.callback.clean_fronts) > 0, "Callback did not record any clean fronts."
+        assert np.isfinite(self.callback.igd_plus[-1]) and self.callback.igd_plus[-1] >= 0, f"Final IGD+ should be finite and non-negative, was {self.callback.igd_plus[-1]}."
+        assert np.isfinite(self.callback.gd_plus[-1]) and self.callback.gd_plus[-1] >= 0, f"Final GD+ should be finite and non-negative, was {self.callback.gd_plus[-1]}."
 
-# Create problem and try to minimize
-problem = NZDT1(noise_std=0.6)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            data_path = os.path.join(tmp_dir, "results.pkl")
+            self.callback.save_data(data_path=data_path)
 
-# Define callback to keep acess later
-callback = CBR_Callback()
+            assert os.path.exists(data_path), f"save_data did not create a file at {data_path}."
+            with open(data_path, "rb") as f:
+                df = pickle.load(f)
+            assert "igd_plus" in df.columns, "Saved dataframe is missing the 'igd_plus' column."
 
-minimize(
-    problem=problem,
-    algorithm = algo_instance,
-    termination=("n_eval",10000),
-    callback = callback
-)
-
-callback.save_data()
-
-with open("/home/malte/Documents/Work/Uncertainty-Framework-WIP/data/results.pkl", "rb") as f:
-    df = pickle.load(file = f)
-    print(df)
+if __name__ == "__main__":
+    unittest.main()

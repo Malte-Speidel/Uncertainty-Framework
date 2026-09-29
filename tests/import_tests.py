@@ -1,27 +1,22 @@
-"""Tests if all modules can be imported properly."""
-
-import os
+"""This module contains tests that check all top-level project modules can be imported properly."""
+# Make other project modules accessible
 import sys
-
+import os
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), ".."))
 
-try:
-    from src.algorithms import *
-except ImportError as err:
-    raise ImportError(f"{err.name} could not be imported. Path: {err.path}.")
+import unittest
+import importlib
 
-print("Algorithms imported: [x]")
+class TestImports(unittest.TestCase):
 
-try:
-    from src.problems import *
-except ImportError as err:
-    raise ImportError(f"{err.name} could not be imported. Path: {err.path}.")
+    def test_algorithms_import(self):
+        importlib.import_module("src.algorithms")
 
-print("Problems imported:   [x]")
+    def test_problems_import(self):
+        importlib.import_module("src.problems")
 
-try:
-    from config import *
-except ImportError as err:
-    raise ImportError(f"{err.name} could not be imported. Path: {err.path}.")
+    def test_config_import(self):
+        importlib.import_module("config")
 
-print("Config imported:     [x]")
+if __name__ == "__main__":
+    unittest.main()
