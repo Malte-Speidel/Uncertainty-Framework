@@ -55,7 +55,7 @@ class CBR_Callback(Callback, LoggingMixin):
         assert callable(getattr(algorithm.problem, "pareto_front")), f"{algorithm.problem.__class__.__name__} does not have an 'pareto_front' function."
 
         # Compute true F values
-        clean_pop = algorithm.problem.evaluate_noiseless(algorithm.pop.get("X"))    # pyright: ignore[reportAttributeAccessIssue]
+        clean_pop = algorithm.problem.evaluate_noiseless(algorithm.pop.get("X"))
         clean_front = clean_pop[NonDominatedSorting().do(F = clean_pop, only_non_dominated_front = True)]
 
         # Collect metrics

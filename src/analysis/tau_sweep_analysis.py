@@ -387,7 +387,7 @@ def get_best_runs(path_to_exp: str, rank_by: str = "combined", weights=(1.0, 1.0
                     st.dataframe(table)
                     continue
                 table = _combined_rank(table, weights).sort_values("rank_score")
-            elif rank_by not in table.columns or table[rank_by].isna().all():  # pyright: ignore[reportGeneralTypeIssues]
+            elif rank_by not in table.columns or table[rank_by].isna().all():
                 st.write(f"No usable '{rank_by}' values; skipping ranking.")
                 st.dataframe(table)
                 continue

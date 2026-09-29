@@ -100,7 +100,7 @@ class RTEA(LoggingMixin, Algorithm):
 
         # During the refinement phase no new candidates are generated, only existing archive members get resampled
         if not self._in_search_phase():
-            return None  # pyright: ignore[reportReturnType]
+            return None
 
         # Sample two archive members at random, only allowing a duplicate pair if the archive has a single member
         if len(self._archive) > 1:
@@ -175,7 +175,7 @@ class RTEA(LoggingMixin, Algorithm):
                         removed_archive_indices.append(i)
             else: # Loop completed without breaking, so individual was not dominated by the archive
                 if in_pop: # Promoted out of the search population
-                    self.pop = self.pop[np.array([p_member is not individual for p_member in self.pop], dtype = bool)]  # pyright: ignore[reportAttributeAccessIssue]
+                    self.pop = self.pop[np.array([p_member is not individual for p_member in self.pop], dtype = bool)]
                 self._archive = Population.merge(a = self._archive, b = individual)
 
             # Demoted members leave the archive here, so their tracked dependents (if any) need to be
@@ -186,7 +186,7 @@ class RTEA(LoggingMixin, Algorithm):
             # Take archive member indices and transfer them to pop
             transfer_pop = self._archive[removed_archive_indices]
             self.pop = Population.merge(a = self.pop, b = transfer_pop)
-            self._archive = self._archive[np.setdiff1d(np.arange(len(self._archive)), removed_archive_indices)]  # pyright: ignore[reportAttributeAccessIssue]
+            self._archive = self._archive[np.setdiff1d(np.arange(len(self._archive)), removed_archive_indices)]
 
     def _set_dominator(self, individual, dominator):
         """Method that records the tracked dominator of an individual, both on the individual itself and in the reverse lookup.
@@ -213,7 +213,7 @@ class RTEA(LoggingMixin, Algorithm):
             rechecked = self._dependents.pop(chosen, [])
 
             # Remove chosen from the archive while its estimate is refined
-            self._archive = self._archive[np.setdiff1d(np.arange(len(self._archive)), [chosen_index])]  # pyright: ignore[reportAttributeAccessIssue]
+            self._archive = self._archive[np.setdiff1d(np.arange(len(self._archive)), [chosen_index])]
 
             # Reevaluate chosen once and fold the new sample into its running mean estimate
             resample = Population.new("X", chosen.X.reshape(1, -1))
@@ -235,7 +235,7 @@ class RTEA(LoggingMixin, Algorithm):
         assert self.termination is not None, f"Termination criterion was none in _in_search_phase method."
         assert hasattr(self.termination, "n_max_evals"), f"Termination had no attribute n_max_evals"
 
-        return self.evaluator.n_eval < (1 - self._archive_refinement) * self.termination.n_max_evals  # pyright: ignore[reportAttributeAccessIssue]
+        return self.evaluator.n_eval < (1 - self._archive_refinement) * self.termination.n_max_evals
 
     def _set_optimum(self) -> None:
         # The archive is the estimated Pareto set, pymoos default would rescan the entire (ever growing) pop after every iteration

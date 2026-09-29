@@ -84,7 +84,7 @@ class MOCBA_NSGA2(NSGA2, LoggingMixin):
             # Identify most probable misclassification
             closest_non_dom, misclass_prob, q_star = self._closest_non_dom_by_risk(ind, non_dom)
 
-            weights[ind] = misclass_prob * np.sqrt(ind.variance[q_star]) / max(ind.n_evals, 1)  # pyright: ignore[reportAttributeAccessIssue]
+            weights[ind] = misclass_prob * np.sqrt(ind.variance[q_star]) / max(ind.n_evals, 1)
 
         total_weight = np.sum([weights[ind] for ind in dom])
 

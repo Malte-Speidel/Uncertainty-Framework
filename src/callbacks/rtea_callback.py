@@ -54,7 +54,7 @@ class RTEA_Callback(Callback, LoggingMixin):
 
         # RTEA's estimated Pareto set is the archive, algorithm.pop only holds currently dominated individuals
         # Compute true F values
-        clean_pop = algorithm.problem.evaluate_noiseless(algorithm._archive.get("X"))    # pyright: ignore[reportAttributeAccessIssue]
+        clean_pop = algorithm.problem.evaluate_noiseless(algorithm._archive.get("X"))
         clean_front = clean_pop[NonDominatedSorting().do(F = clean_pop, only_non_dominated_front = True)]
 
         # Collect metrics
