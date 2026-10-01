@@ -28,14 +28,19 @@ import pickle
 class RTEA_Callback(Callback, LoggingMixin):
     """This class implements the standard callback used for RTEA experiments."""
 
-    def __init__(self) -> None:
+    def __init__(self, log_interval: int = 50) -> None:
+        """Init function for the RTEA callback.
+
+        Args:
+            log_interval (int, optional): Interval for logging, given in generations. Defaults to 50.
+        """
         self.means = []
         self.re_evaluations = [] # Re-evaluations (summed) per generation
         self.evaluations_per_gen = [] # Stores the evaluation counter after every generation
-        self.clean_pops = [] # Stores populations evaluated without noise
         self.clean_fronts = []
         self.igd_plus = []
         self.gd_plus = []
+        self.log_interval = log_interval
         self.logger.info(f"Instance of {self.__class__.__name__} created.")
         super().__init__()
 
@@ -45,29 +50,31 @@ class RTEA_Callback(Callback, LoggingMixin):
         Args:
             algorithm (Algorithm): Instance of the algorithm for which to collect data."""
 
-        # Safety checks
-        assert algorithm._archive is not None, f"Tried to execute notify function, but algorithm._archive was None."
-        assert algorithm.problem is not None, f"Problem instance inside the supplied algorithm was None."
-        assert all(ind.has("n_evals") for ind in algorithm._archive), f"Tried to execute notify function, but not all individuals of the archive have attribute 'n_evals'."
-        assert callable(getattr(algorithm.problem, "evaluate_noiseless")), f"{algorithm.problem.__class__.__name__} does not have an 'evaluate_noiseless' funciton."
-        assert callable(getattr(algorithm.problem, "pareto_front")), f"{algorithm.problem.__class__.__name__} does not have an 'pareto_front' function."
 
-        # RTEA's estimated Pareto set is the archive, algorithm.pop only holds currently dominated individuals
-        # Compute true F values
-        clean_pop = algorithm.problem.evaluate_noiseless(algorithm._archive.get("X"))
-        clean_front = clean_pop[NonDominatedSorting().do(F = clean_pop, only_non_dominated_front = True)]
+        if algorithm.n_iter % self.log_interval == 0 or algorithm.termination.has_terminated()  or algorithm.n_iter == 1:
 
-        # Collect metrics
-        self.means.append([ind.F for ind in algorithm._archive]) # F is already the running mean estimate under RTEA's incremental resampling
-        self.re_evaluations.append(np.sum([ind.get("n_evals") for ind in Population.merge(a = algorithm._archive, b = algorithm.pop)]))
-        self.evaluations_per_gen.append(algorithm.evaluator.n_eval)
-        self.clean_pops.append(clean_pop)
-        self.clean_fronts.append(clean_front)
-        self.igd_plus.append(self.calculate_igd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
-        self.gd_plus.append(self.calculate_gd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
+            # Safety checks
+            assert algorithm._archive is not None, f"Tried to execute notify function, but algorithm._archive was None."
+            assert algorithm.problem is not None, f"Problem instance inside the supplied algorithm was None."
+            assert all(ind.has("n_evals") for ind in algorithm._archive), f"Tried to execute notify function, but not all individuals of the archive have attribute 'n_evals'."
+            assert callable(getattr(algorithm.problem, "evaluate_noiseless")), f"{algorithm.problem.__class__.__name__} does not have an 'evaluate_noiseless' funciton."
+            assert callable(getattr(algorithm.problem, "pareto_front")), f"{algorithm.problem.__class__.__name__} does not have an 'pareto_front' function."
 
-        self.logger.debug(f"Callback collected metrics, Ammount --> Means:{len(self.means)}, Re-Evaluations: {len(self.re_evaluations)}.")
-        return super().notify(algorithm)
+            # RTEA's estimated Pareto set is the archive, algorithm.pop only holds currently dominated individuals
+            # Compute true F values
+            clean_pop = algorithm.problem.evaluate_noiseless(algorithm._archive.get("X"))
+            clean_front = clean_pop[NonDominatedSorting().do(F = clean_pop, only_non_dominated_front = True)]
+
+            # Collect metrics
+            self.means.append([ind.F for ind in algorithm._archive]) # F is already the running mean estimate under RTEA's incremental resampling
+            self.re_evaluations.append(np.sum([ind.get("n_evals") for ind in Population.merge(a = algorithm._archive, b = algorithm.pop)]))
+            self.evaluations_per_gen.append(algorithm.evaluator.n_eval)
+            self.clean_fronts.append(clean_front)
+            self.igd_plus.append(self.calculate_igd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
+            self.gd_plus.append(self.calculate_gd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
+
+            self.logger.debug(f"Callback collected metrics, Ammount --> Means:{len(self.means)}, Re-Evaluations: {len(self.re_evaluations)}.")
+            return super().notify(algorithm)
 
     def save_data(self, data_path: str= f"{Path(__file__).resolve().parents[2]}/data/results.pkl", wipe_old_data = True):
         """Function that saves the current data of the callback to a predefined path.
@@ -89,7 +96,6 @@ class RTEA_Callback(Callback, LoggingMixin):
 
         # Create data dict
         data_dict = {
-            # "clean_pops": self.clean_pops,
             "clean_fronts": self.clean_fronts,
             "means": self.means,
             "re_evaluations": self.re_evaluations,

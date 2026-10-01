@@ -32,7 +32,6 @@ class CBR_Callback(Callback, LoggingMixin):
         self.suggested_thresholds = []
         self.re_evaluations = [] # Re-evaluations (summed) per generation
         self.evaluations_per_gen = [] # Stores the evaluation counter after every generation
-        self.clean_pops = [] # Stores populations evaluated without noise
         self.clean_fronts = []
         self.igd_plus = []
         self.gd_plus = []
@@ -63,7 +62,6 @@ class CBR_Callback(Callback, LoggingMixin):
         self.suggested_thresholds.append([ind.suggested_threshold for ind in algorithm.pop])
         self.re_evaluations.append(np.sum([ind.n_evals for ind in algorithm.pop]))
         self.evaluations_per_gen.append(algorithm.evaluator.n_eval)
-        self.clean_pops.append(clean_pop)
         self.clean_fronts.append(clean_front)
         self.igd_plus.append(self.calculate_igd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
         self.gd_plus.append(self.calculate_gd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
@@ -91,7 +89,6 @@ class CBR_Callback(Callback, LoggingMixin):
 
         # Create data dict
         data_dict = {
-            # "clean_pops": self.clean_pops,
             "clean_fronts": self.clean_fronts,
             "means": self.means,
             "suggested_thresholds": self.suggested_thresholds,
