@@ -78,6 +78,9 @@ class RTEA(LoggingMixin, Algorithm):
         # Create archive
         self._archive: Population = Population()
 
+        # F values of the archive members in archive order, kept in sync so dominance checks against the archive can be vectorized
+        self._archive_F: np.ndarray = np.empty((0, 0))
+
         # Reverse lookup from a dominator to the pop members that currently track it, saves scanning the whole pop on every resample
         self._dependents: dict[Individual, list[Individual]] = {}
 
@@ -159,24 +162,32 @@ class RTEA(LoggingMixin, Algorithm):
         while to_process:
             individual, in_pop = to_process.pop()
 
-            removed_archive_indices = []
-            # Dominance check against archive
-            for i, a_member in enumerate(self._archive):
-                dom_realation = Dominator().get_relation(a = a_member.F , b = individual.F)
+            # Dominance check against the whole archive at once
+            archive_dominates, individual_dominates = self._dominance_against_archive(individual.F)
+            dominator_indices = np.flatnonzero(archive_dominates)
 
-                match dom_realation:
-                    case 1: # Archive member dominates individual
-                        self._set_dominator(individual, a_member)
-                        if not in_pop:
-                            self.pop = Population.merge(a = self.pop, b = individual)
-                        break
-                    case -1: # Individual dominates archive member
-                        self._set_dominator(a_member, individual)
-                        removed_archive_indices.append(i)
-            else: # Loop completed without breaking, so individual was not dominated by the archive
+            # Archive members are checked in archive order, so only members dominated before the first dominating archive member count as removed
+            # This matches a sequential scan that stops at the first archive member dominating the individual
+            if len(dominator_indices) > 0:
+                removed_archive_indices = np.flatnonzero(individual_dominates[:dominator_indices[0]])
+            else:
+                removed_archive_indices = np.flatnonzero(individual_dominates)
+
+            for i in removed_archive_indices: # Individual dominates archive member
+                self._set_dominator(self._archive[i], individual)
+
+            if len(dominator_indices) > 0: # Archive member dominates individual
+                self._set_dominator(individual, self._archive[dominator_indices[0]])
+                if not in_pop:
+                    self.pop = Population.merge(a = self.pop, b = individual)
+            else: # Individual was not dominated by the archive
                 if in_pop: # Promoted out of the search population
-                    self.pop = self.pop[np.array([p_member is not individual for p_member in self.pop], dtype = bool)]
-                self._archive = Population.merge(a = self._archive, b = individual)
+                    self.pop = self.pop[np.asarray(self.pop != individual, dtype = bool)]
+                self._add_to_archive(individual)
+
+            # Most checks leave the archive untouched, skipping the transfer saves a pop copy every call
+            if len(removed_archive_indices) == 0:
+                continue
 
             # Demoted members leave the archive here, so their tracked dependents (if any) need to be
             # queued for a recheck against the updated archive instead of being left stale in _dependents.
@@ -186,7 +197,45 @@ class RTEA(LoggingMixin, Algorithm):
             # Take archive member indices and transfer them to pop
             transfer_pop = self._archive[removed_archive_indices]
             self.pop = Population.merge(a = self.pop, b = transfer_pop)
-            self._archive = self._archive[np.setdiff1d(np.arange(len(self._archive)), removed_archive_indices)]
+            self._remove_from_archive(removed_archive_indices)
+
+    def _dominance_against_archive(self, F: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Method that computes the dominance relations between objective vectors and every archive member.
+
+        Same relation as pymoo's Dominator.get_relation, just for the whole archive in one go.
+
+        Args:
+            F (np.ndarray): Single objective vector of shape (n_obj,) or several stacked ones of shape (n, n_obj).
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: Boolean masks in archive order (one row per vector for stacked F), first marks archive members dominating F, second marks archive members dominated by F."""
+
+        # Extra axis lets every vector in F be compared against every archive member through broadcasting
+        F = F[..., None, :]
+        archive_dominates = np.all(self._archive_F <= F, axis = -1) & np.any(self._archive_F < F, axis = -1)
+        individual_dominates = np.all(F <= self._archive_F, axis = -1) & np.any(F < self._archive_F, axis = -1)
+
+        return archive_dominates, individual_dominates
+
+    def _add_to_archive(self, individual: Individual):
+        """Method that appends an individual to the archive and its F values to the archive F cache.
+
+        Args:
+            individual (Individual): Individual to add."""
+
+        self._archive = Population.merge(a = self._archive, b = individual)
+        self._archive_F = np.vstack([self._archive_F, individual.F])
+
+    def _remove_from_archive(self, indices):
+        """Method that removes archive members and their F values from the archive F cache.
+
+        Args:
+            indices (array-like): Archive indices of the members to remove."""
+
+        keep = np.ones(len(self._archive), dtype = bool)
+        keep[indices] = False
+        self._archive = self._archive[keep]
+        self._archive_F = self._archive_F[keep]
 
     def _set_dominator(self, individual, dominator):
         """Method that records the tracked dominator of an individual, both on the individual itself and in the reverse lookup.
@@ -213,7 +262,7 @@ class RTEA(LoggingMixin, Algorithm):
             rechecked = self._dependents.pop(chosen, [])
 
             # Remove chosen from the archive while its estimate is refined
-            self._archive = self._archive[np.setdiff1d(np.arange(len(self._archive)), [chosen_index])]
+            self._remove_from_archive([chosen_index])
 
             # Reevaluate chosen once and fold the new sample into its running mean estimate
             resample = Population.new("X", chosen.X.reshape(1, -1))
@@ -225,8 +274,47 @@ class RTEA(LoggingMixin, Algorithm):
 
             self._update_front(chosen)
 
-            for p_member in rechecked:
-                self._update_front(p_member, in_pop = True)
+            self._recheck_dependents(rechecked)
+
+    def _recheck_dependents(self, rechecked: list[Individual]):
+        """Method that rechecks pop members against the archive after their tracked dominator got resampled.
+
+        All members are compared against the archive in one go, members that stay dominated only get their new dominator set.
+        Members that are not dominated anymore go through _update_front, which changes the archive, so the remaining members get compared again afterwards.
+        Members are processed in the given order, so the outcome is the same as calling _update_front on each of them one after another.
+
+        Args:
+            rechecked (list[Individual]): Pop members that tracked the resampled archive member as their dominator."""
+
+        start = 0
+        while start < len(rechecked):
+            # Nothing can dominate a member against an empty archive, so the next one gets promoted through _update_front
+            if len(self._archive) == 0:
+                self._update_front(rechecked[start], in_pop = True)
+                start += 1
+                continue
+
+            remaining = rechecked[start:]
+            archive_dominates, member_dominates = self._dominance_against_archive(np.array([p_member.F for p_member in remaining]))
+
+            # First dominating archive member per pop member, which is the one _update_front would pick
+            has_dominator = archive_dominates.any(axis = 1)
+            first_dominator = archive_dominates.argmax(axis = 1)
+
+            # A member only stays untouched in pop if it does not dominate any archive member before its first dominator
+            # Should never happen for a mutually non-dominated archive, but those members take the full _update_front path to be safe
+            before_dominator = np.arange(len(self._archive)) < first_dominator[:, None]
+            stays_dominated = has_dominator & ~np.any(member_dominates & before_dominator, axis = 1)
+
+            for row, p_member in enumerate(remaining):
+                if stays_dominated[row]:
+                    self._set_dominator(p_member, self._archive[first_dominator[row]])
+                else: # Member gets promoted, archive changes, so the remaining members are compared again
+                    self._update_front(p_member, in_pop = True)
+                    start += row + 1
+                    break
+            else: # Every remaining member stayed dominated
+                start = len(rechecked)
 
     def _in_search_phase(self) -> bool:
         """Method that checks whether the run is still in its search phase, as opposed to the pure archive refinement phase."""
@@ -253,6 +341,7 @@ class RTEA(LoggingMixin, Algorithm):
             population.set("n_evals", 1)
             non_dom = NDS().do(F = population.get("F"), only_non_dominated_front = True)
             self._archive = typing.cast(Population, population[non_dom])
+            self._archive_F = self._archive.get("F")
             self.pop = typing.cast(Population, population[np.setdiff1d(np.arange(len(population)), non_dom)])
 
         self.logger.debug(f"Individuals in archive: {len(self._archive)}, Individuals in pop {len(self.pop)}")
