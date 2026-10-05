@@ -21,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 # Pymoo imports
 from pymoo.indicators.hv import HV
 
-RESULTS_ROOT = "/home/malte/Documents/Work/Uncertainty-Framework-WIP/results/main_eval"
+RESULTS_ROOT = str(Path(__file__).resolve().parents[2] / "results" / "main_eval")
 
 # The pickles hold every column CBR_Callback.save_data writes: "clean_fronts",
 # "means", "suggested_thresholds", "re_evaluations", "evaluations_per_gen",

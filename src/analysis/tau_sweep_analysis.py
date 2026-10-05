@@ -421,9 +421,10 @@ def get_best_runs(path_to_exp: str, rank_by: str = "combined", weights=(1.0, 1.0
     return results
 
 def main():
-    results_paths = ["/home/malte/Documents/Work/Uncertainty-Framework-WIP/results/tau_sweep/cbr_nsga2",
-        Path("/home/malte/Documents/Work/Uncertainty-Framework-WIP/results/mocba_sweep/mocba_nsga2"),
-        Path("/home/malte/Documents/Work/Uncertainty-Framework-WIP/results/static_sweep/sr_nsga2")]
+    results_root = Path(__file__).resolve().parents[2] / "results"
+    results_paths = [results_root / "tau_sweep" / "cbr_nsga2",
+        results_root / "mocba_sweep" / "mocba_nsga2",
+        results_root / "static_sweep" / "sr_nsga2"]
     # LEVELS = ["problem", "noise_type", "std", "threshold"]
 
     # st.title("CBR-NSGA-II Threshold Sweep Results")

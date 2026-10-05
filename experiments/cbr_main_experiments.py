@@ -10,8 +10,11 @@ sys.path.insert(1, os.path.join(os.path.dirname(__file__), ".."))
 from src.algorithms.resampling_adaptations.cbr_nsga2 import CBR_NSGA2
 from src.algorithms.resampling_adaptations.mocba_nsga2 import MOCBA_NSGA2
 from src.algorithms.resampling_adaptations.static_res_nsga2 import SR_NSGA2
+from src.algorithms.resampling_adaptations.rtea import RTEA
 from src.callbacks.cbr_callback import CBR_Callback
-from src.problems.noisy_zdt import NZDT1, NZDT2, NZDT3, NZDT4, NZDT6
+from src.callbacks.rtea_callback import RTEA_Callback
+from src.problems.noisy_zdt import *
+from src.problems.noisy_dtlz import *
 
 # Import Config
 from config import parameters
@@ -50,6 +53,10 @@ def start_experiment(args: tuple):
         case "NZDT3": problem_instance = NZDT3(noise_std = NOISE_LEVELS[noise_level])
         case "NZDT4": problem_instance = NZDT4(noise_std = NOISE_LEVELS[noise_level])
         case "NZDT6": problem_instance = NZDT6(noise_std = NOISE_LEVELS[noise_level])
+        case "NDTLZ1": problem_instance = NDTLZ1(noise_std = NOISE_LEVELS[noise_level])
+        case "NDTLZ2": problem_instance = NDTLZ2(noise_std = NOISE_LEVELS[noise_level])
+        case "NDTLZ3": problem_instance = NDTLZ3(noise_std = NOISE_LEVELS[noise_level])
+        case "NDTLZ7": problem_instance = NDTLZ7(noise_std = NOISE_LEVELS[noise_level])
         case _: raise ValueError(f"Supplied problem instance name did not match implemented problems.")
 
     assert problem_instance is not None, f"Problem instance was None after problem should have been selected. Supplied name '{problem}'."
@@ -67,11 +74,17 @@ def start_experiment(args: tuple):
         case "sr":
             assert type(parameters) == int, f"Selected algorithm was Static Resampling NSGA2 but supplied parameter was not of type int. Supplied parameter {parameters}, type: {type(parameters)}."
             algorithm_instance = SR_NSGA2(k = parameters)
+        case "rtea":
+            assert type(parameters) == int, f"Selected algorithm was RTEA but the supplied parameter was not of type int."
+            algorithm_instance = RTEA(archive_resamples=parameters)
         case _: raise ValueError(f"Supplied algorithm name did not match implemented algorithms. Supplied algorihm name '{algorithm}'.")
 
     assert algorithm_instance is not None, f"Algorithm instance was None after algorithm should have been selected. Supplied name '{algorithm}'."
 
-    callback_instance = CBR_Callback()
+    if type(algorithm_instance) != RTEA:
+        callback_instance = CBR_Callback()
+    else:
+        callback_instance = RTEA_Callback()
 
     print(f"Starting optimization --> Problem: {problem_instance.__class__.__name__}, Noise type: {problem_instance.noise_type}, Noise std: {problem_instance.noise_std}, Algorithm: {algorithm_instance.__class__.__name__}, Parameters: {parameters}.")
 
@@ -79,7 +92,8 @@ def start_experiment(args: tuple):
         problem=problem_instance,
         algorithm=algorithm_instance,
         termination=("n_eval", 300000),
-        callback=callback_instance
+        callback=callback_instance,
+        seed=seed
     )
 
     path = _result_dir(
@@ -122,6 +136,9 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
         case "sr":
             assert isinstance(parameters, int), f"sr expects an int k, got {parameters!r}."
             algo, param_dir = "sr_nsga2", f"k_{parameters:03d}"
+        case "rtea":
+            assert isinstance(parameters, int), f"rtea expects k, got {parameters!r}"
+            algo, param_dir = "rtea", f"k_{parameters:03d}"
         case _:
             raise ValueError(f"Supplied algorithm name did not match implemented algorithms. Supplied algorithm name '{algorithm}'.")
 
@@ -138,7 +155,7 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "sr", "mocba"])
+    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "sr", "mocba", "rtea"])
     parser.add_argument("--noise_level", type=int, required=True, choices=[0, 1, 2, 3, 4, 5])
     parser.add_argument("--problem", type=str, required=True, choices=['NZDT1', 'NZDT2', 'NZDT3', 'NZDT4', 'NZDT6', 'NDTLZ1', 'NDTLZ2', 'NDTLZ3', 'NDTLZ7'])
 
