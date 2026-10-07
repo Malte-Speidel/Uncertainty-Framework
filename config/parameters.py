@@ -1,9 +1,4 @@
 """This module contains the parameters for the CBR_NSGA2 test suite."""
-
-# Lists are per noise std: [0.05, 0.10, 0.15, 0.20, 0.25, 0.30].
-# All three (cbr, mocba, sr) picked from the 3rd sweep (weighted rank HV>IGD+>GD+, 3:2:1).
-# rtea (archive resamples k) picked from the rtea sweep + refinement (k=7/15/20) with the same weighted rank; ties broken by HV.
-# NDTLZ1/NDTLZ3 rtea ranked on IGD+:GD+ (2:1) only -- HV can't separate configs there (ref point blown up by unconverged runs).
 params = {
     "NZDT1": {
         "cbr": [0.85, 0.85, 0.7, 0.7, 0.7, 0.7],
@@ -36,15 +31,27 @@ params = {
         "rtea": [1, 2, 2, 2, 2, 2],
     },
     "NDTLZ1": {
+        "cbr": [1.2, 0.95, 1.0, 0.95, 0.95, 1.0],
+        "mocba": [(20, 8), (600, 5), (600, 3), (20, 3), (250, 5), (400, 3)],
+        "sr": [4, 6, 4, 2, 2, 6],
         "rtea": [1, 2, 3, 5, 5, 2],
     },
     "NDTLZ2": {
+        "cbr": [0.7, 0.25, 0.85, 0.7, 0.85, 0.7],
+        "mocba": [(20, 5), (20, 3), (20, 5), (400, 8), (20, 12), (20, 12)],
+        "sr": [10, 4, 10, 10, 16, 24],
         "rtea": [2, 5, 5, 5, 10, 10],
     },
     "NDTLZ3": {
+        "cbr": [1.5, 1.5, 1.2, 1.2, 1.0, 1.2],
+        "mocba": [(250, 3), (20, 3), (20, 3), (20, 3), (250, 3), (250, 3)],
+        "sr": [2, 4, 1, 2, 1, 2],
         "rtea": [1, 1, 2, 1, 2, 1],
     },
     "NDTLZ7": {
+        "cbr": [0.85, 0.85, 0.7, 0.85, 0.55, 0.1],
+        "mocba": [(20, 3), (20, 5), (60, 3), (20, 8), (20, 8), (20, 8)],
+        "sr": [2, 6, 6, 6, 10, 6],
         "rtea": [2, 2, 3, 7, 5, 7],
     },
 }
