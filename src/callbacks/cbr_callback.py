@@ -8,6 +8,9 @@ sys.path.insert(1, os.path.join(os.path.dirname(__file__), ".."))
 # Logger import
 from config.logging_mixin import LoggingMixin
 
+# Minkowski distance import
+from src.resampling.cb_resampling import CB_Resampling
+
 # Package import
 import numpy as np
 import pandas as pd
@@ -35,6 +38,7 @@ class CBR_Callback(Callback, LoggingMixin):
         self.clean_fronts = []
         self.igd_plus = []
         self.gd_plus = []
+        self.noise_misinfo = []
         self.logger.info(f"Instance of {self.__class__.__name__} created.")
         super().__init__()
 
@@ -65,6 +69,7 @@ class CBR_Callback(Callback, LoggingMixin):
         self.clean_fronts.append(clean_front)
         self.igd_plus.append(self.calculate_igd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
         self.gd_plus.append(self.calculate_gd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
+        self.noise_misinfo.append(self.calculate_noise_misinfo(algorithm=algorithm))
 
         self.logger.debug(f"Callback collected metrics, Ammount --> Means:{len(self.means)}, Suggested Thresholds: {len(self.suggested_thresholds)}, Re-Evaluations: {len(self.re_evaluations)}.")
         return super().notify(algorithm)
@@ -95,7 +100,8 @@ class CBR_Callback(Callback, LoggingMixin):
             "re_evaluations": self.re_evaluations,
             "evaluations_per_gen": self.evaluations_per_gen,
             "igd_plus": self.igd_plus,
-            "gd_plus": self.gd_plus
+            "gd_plus": self.gd_plus,
+            "noise_misinfo": self.noise_misinfo
         }
 
         # Make dataframe
@@ -128,3 +134,23 @@ class CBR_Callback(Callback, LoggingMixin):
         gd_plus_value = gd_plus_indiator.do(F = approx_pf)
         assert gd_plus_value is not None, f"Tried to calculate GD+ value but was None."
         return gd_plus_value
+
+    def calculate_noise_misinfo(self, algorithm: Algorithm) -> float:
+        """Method that calculates noise misinformation according to RTEA paper of Fieldsend.
+
+        Args:
+            algorithm (pymoo.Algorithm): Algorithm instance
+
+        Returns:
+            float: Average noise misinformation value.
+        """
+
+        # Get function values and also noise free values
+        noisy_values = algorithm.opt.get("F")
+        noise_free_values = algorithm.problem.evaluate_noiseless(algorithm.opt.get("X"))
+
+        noise_misinfo = np.sqrt(np.sum([CB_Resampling._minkowski_dist(noisy_values[i], noise_free_values[i])**2 for i in range(len(algorithm.opt))])/len(noisy_values))
+
+        self.logger.debug(f"Noise misinformation was calculated as {noise_misinfo}")
+
+        return noise_misinfo
