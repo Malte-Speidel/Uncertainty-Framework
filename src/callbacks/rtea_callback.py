@@ -7,6 +7,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(__file__), ".."))
 
 # Logger import
 from config.logging_mixin import LoggingMixin
+from src.resampling.cb_resampling import CB_Resampling
 
 # Package import
 import numpy as np
@@ -41,6 +42,7 @@ class RTEA_Callback(Callback, LoggingMixin):
         self.igd_plus = []
         self.gd_plus = []
         self.log_interval = log_interval
+        self.noise_misinfo = []
         self.logger.info(f"Instance of {self.__class__.__name__} created.")
         super().__init__()
 
@@ -72,6 +74,7 @@ class RTEA_Callback(Callback, LoggingMixin):
             self.clean_fronts.append(clean_front)
             self.igd_plus.append(self.calculate_igd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
             self.gd_plus.append(self.calculate_gd_plus(true_pf = algorithm.problem.pareto_front(), approx_pf = clean_front))
+            self.noise_misinfo.append(self.calculate_noise_misinfo(algorithm=algorithm))
 
             self.logger.debug(f"Callback collected metrics, Ammount --> Means:{len(self.means)}, Re-Evaluations: {len(self.re_evaluations)}.")
             return super().notify(algorithm)
@@ -134,3 +137,23 @@ class RTEA_Callback(Callback, LoggingMixin):
         gd_plus_value = gd_plus_indiator.do(F = approx_pf)
         assert gd_plus_value is not None, f"Tried to calculate GD+ value but was None."
         return gd_plus_value
+
+    def calculate_noise_misinfo(self, algorithm: Algorithm) -> float:
+        """Method that calculates noise misinformation according to RTEA paper of Fieldsend.
+
+        Args:
+            algorithm (pymoo.Algorithm): Algorithm instance
+
+        Returns:
+            float: Average noise misinformation value.
+        """
+
+        # Get function values and also noise free values
+        noisy_values = algorithm._archive.get("F")
+        noise_free_values = algorithm.problem.evaluate_noiseless(algorithm._archive.get("X"))
+
+        noise_misinfo = np.sqrt(np.sum([CB_Resampling._minkowski_dist(noisy_values[i], noise_free_values[i])**2 for i in range(len(algorithm._archive))])/len(noisy_values))
+
+        print(f"Noise misinformation was calculated as {noise_misinfo}")
+
+        return noise_misinfo
