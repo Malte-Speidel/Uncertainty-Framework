@@ -20,9 +20,10 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 class CBR_NSGA2(NSGA2, LoggingMixin):
     """This class implements NSGA-II with CB_Resampling."""
 
-    def __init__(self, pop_size=100, resampling_threshold:float = 1.0, **kwargs):
+    def __init__(self, pop_size=100, resampling_threshold:float = 1.0, num_neighbors:int = 5, **kwargs):
         super().__init__(pop_size=pop_size, **kwargs)
         self.resampling_threshold  = resampling_threshold
+        self.num_neighbors = num_neighbors
         self.logger.info(f"Instance of {self.__class__.__name__} created.")
 
     def _initialize_advance(self, infills=None, **kwargs):
@@ -40,6 +41,6 @@ class CBR_NSGA2(NSGA2, LoggingMixin):
         CB_Resampling._prepare_infills(infills = infills)
 
         self.logger.debug("Calling threshold resampling")
-        CB_Resampling.resample(algo_instance=self, dynamic_threshold=False, threshold=self.resampling_threshold)
+        CB_Resampling.resample(algo_instance=self, dynamic_threshold=False, threshold=self.resampling_threshold, num_neighbors=self.num_neighbors)
 
         return super()._advance(infills, **kwargs) # Survival happens in this step

@@ -38,7 +38,7 @@ import multiprocessing as mp
 # Results path as global variable
 RESULTS_ROOT = Path(__file__).resolve().parents[1] / "results"
 
-def tau_sweep(seed: int, threshold: float, problem: str, std: float, noise_type: str):
+def tau_sweep(seed: int, threshold: float, num_neighbors: int, problem: str, std: float, noise_type: str):
     """Method that starts the experiments.
 
     Args:
@@ -52,7 +52,7 @@ def tau_sweep(seed: int, threshold: float, problem: str, std: float, noise_type:
     np.random.seed(seed)
 
     # Initialize Algorithm, Callback and Problem
-    algo_instance = CBR_NSGA2(resampling_threshold=threshold)
+    algo_instance = CBR_NSGA2(resampling_threshold=threshold, num_neighbors=num_neighbors)
     problem_instance = None
 
     match problem:
@@ -83,7 +83,7 @@ def tau_sweep(seed: int, threshold: float, problem: str, std: float, noise_type:
         problem = problem,
         noise_type = noise_type,
         std = std,
-        param_dir = f"tau_{threshold:.3f}",
+        param_dir = f"tau_{threshold:.3f}_nn_{num_neighbors}",
         seed = seed,
     )
     callback_instance.save_data(data_path = path, wipe_old_data=False)
@@ -284,6 +284,8 @@ if __name__ == "__main__":
     # Algorithm-specific swept parameters (validated against --algo below).
     parser.add_argument("--threshold", type=float,
                    help="Resampling threshold tau. Required for --algo cbr.")
+    parser.add_argument("--num-neighbors", type=int,
+                   help="Number of neighbors used for UCB formula. Required for --algo cbr")
     parser.add_argument("--n-samples", type=int,
                    help="Static number of samples k. Required for --algo sr.")
     parser.add_argument("--budget", type=int,
@@ -300,8 +302,10 @@ if __name__ == "__main__":
     if args.algo == "cbr":
         if args.threshold is None:
             parser.error("--threshold is required when --algo cbr")
+        if args.num_neighbors is None:
+            parser.error("--num-neighbors is required when --algo cbr")
         func = tau_sweep
-        tasks = [(s, args.threshold, args.problem, args.std, args.noise_type) for s in seeds]
+        tasks = [(s, args.threshold, args.num_neighbors, args.problem, args.std, args.noise_type) for s in seeds]
     elif args.algo == "sr":
         if args.n_samples is None:
             parser.error("--n-samples is required when --algo sr")

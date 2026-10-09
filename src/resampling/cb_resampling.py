@@ -23,23 +23,24 @@ class CB_Resampling(LoggingMixin):
     """Class that contains the resampling methods."""
 
     @staticmethod
-    def resample(algo_instance: Algorithm, dynamic_threshold: bool = True, threshold: np.ndarray = None, **kwargs):
+    def resample(algo_instance: Algorithm, dynamic_threshold: bool = True, threshold: np.ndarray = None, num_neighbors: int = 5, **kwargs):
         """Takes an algorithm instance and applies confidence bound resampling to its individuals.
 
         Args:
             algo_instance (Algorithm): Instance of the pymoo genetic algorithm.
             dynamic_threshold (bool, optional): Decides if fixed or dynamic threshold is used. Defaults to True.
             threshold (np.ndarray, optional): Threshold for which to re-evaluate (ind.uncertainty >= threshold -> re-eval). Defaults to None.
+            num_neighbors (int, optional): Number of neighbors used to determine T in UCB formula. Defaults to 5.
         """
         CB_Resampling.logger.debug("Starting population resampling.")
 
         if dynamic_threshold:
             # Calculate threshold
             dyn_threshold = CB_Resampling._calc_threshold(algo_instance = algo_instance, method = "population")
-            CB_Resampling._threshold_resampling(algo_instance=algo_instance, threshold = dyn_threshold)
+            CB_Resampling._threshold_resampling(algo_instance=algo_instance, threshold = dyn_threshold, num_neighbors=num_neighbors)
         else:
             # Use fixed threshold
-            CB_Resampling._threshold_resampling(algo_instance = algo_instance, threshold = threshold)
+            CB_Resampling._threshold_resampling(algo_instance = algo_instance, threshold = threshold, num_neighbors=num_neighbors)
 
 
     @staticmethod
@@ -64,12 +65,13 @@ class CB_Resampling(LoggingMixin):
                 ind.F = ind.mean
 
     @staticmethod
-    def _threshold_resampling(algo_instance: Algorithm, threshold: np.ndarray):
+    def _threshold_resampling(algo_instance: Algorithm, threshold: np.ndarray, num_neighbors: int = 5):
         """Re-evaluates individuals that are over the specified threshold.
 
         Args:
             algo_instance (Algorithm): Instance of the pymoo genetic algorithm.
             threshold (np.ndarray): Threshold for which to re-evaluate (ind.uncertainty >= threshold -> re-eval)
+            num_neighbors (int, optional): Number of neighbors used to determine T in UCB formula. Defaults to 5.
         """
 
         CB_Resampling.logger.debug("Applying CB resampling.")
@@ -79,7 +81,7 @@ class CB_Resampling(LoggingMixin):
 
         assert algo_instance.pop is not None, f"Population of {algo_instance.__class__.__name__} was None but should not have been."
 
-        pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = 5)
+        pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors)
 
         # Calculate T values and the indicator value --> Decide if resampling is necessary
         for knn in pop_knn:
@@ -144,6 +146,13 @@ class CB_Resampling(LoggingMixin):
     def _knn(pop: Population, k: int = 5) -> list:
         """Returns a list of k nearest neighbors for every individual in the population.
 
+        Distances are computed on objectives normalized by the population's current
+        per-objective range (min-max over every `ind.mean` in `pop`), not on raw
+        objective values. Without this, the objective with the largest raw scale
+        dominates the Euclidean distance -- e.g. DTLZ1/DTLZ3 objectives can be ~1000x
+        larger far from the Pareto front than near it, and DTLZ7's last objective
+        is ~10-25x larger than the other two at all times.
+
         Args:
             pop (Population): Pymoo population for which to compute KNN.
             k (int, optional): Number of neighbors. Defaults to 5.
@@ -153,13 +162,20 @@ class CB_Resampling(LoggingMixin):
         """
 
         CB_Resampling.logger.debug(f"Calculating KNN for population of size {len(pop)}.")
-        neighbors = []
-        for ind in pop:
-            distances = []
-            for ind2 in pop:
-                if ind is ind2: continue
 
-                distances.append([ind2, CB_Resampling._minkowski_dist(ind.mean, ind2.mean)])
+        means = np.array([ind.mean for ind in pop])
+        f_min = means.min(axis=0)
+        f_range = means.max(axis=0) - f_min
+        f_range[f_range == 0] = 1.0  # Flat objective: every individual is equal on it, so it contributes 0 distance either way.
+        normed_means = (means - f_min) / f_range
+
+        neighbors = []
+        for i, ind in enumerate(pop):
+            distances = []
+            for j, ind2 in enumerate(pop):
+                if i == j: continue
+
+                distances.append([ind2, CB_Resampling._minkowski_dist(normed_means[i], normed_means[j])])
 
             # Sort based on distance to ind
             distances.sort(key=lambda x: x[1])

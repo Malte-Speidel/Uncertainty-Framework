@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
-import streamlit as st
 
 # Python imports
 from pathlib import Path
@@ -22,6 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pymoo.indicators.hv import HV
 
 RESULTS_ROOT = str(Path(__file__).resolve().parents[2] / "results" / "main_eval")
+PLOTS_ROOT = str(Path(__file__).resolve().parents[2] / "results" / "main_eval_plots")
 
 # The pickles hold every column CBR_Callback.save_data writes: "clean_fronts",
 # "means", "suggested_thresholds", "re_evaluations", "evaluations_per_gen",
@@ -379,15 +379,8 @@ def create_metric_comparison_plot(series: dict[str, dict], metric_col: str, ylab
 
 
 # --------------------------------------------------------------------------- #
-# Streamlit display
+# PNG export
 # --------------------------------------------------------------------------- #
-
-@st.cache_data(show_spinner="Loading result data...")
-def get_data(refresh: bool = False) -> dict:
-    """Streamlit-cached wrapper around `load_data` (session-lifetime cache on
-    top of `load_data`'s own disk cache)."""
-    return load_data(refresh=refresh)
-
 
 def _build_comparison_series(algo_results: dict, algos: list, problem: str, noise_type: str, std: str) -> tuple[dict, dict]:
     """Gathers, per algorithm, the compiled data for one (problem, noise_type, std)
@@ -416,56 +409,55 @@ def _build_comparison_series(algo_results: dict, algos: list, problem: str, nois
     return series, meta
 
 
-def main():
-    st.set_page_config(page_title="Main Evaluation", layout="wide")
-    st.title("Main Evaluation Results — Algorithm Comparison")
+def _save_and_close(fig, path: str) -> None:
+    """Saves `fig` to `path` and closes it immediately, so matplotlib never
+    holds more than one rendered figure in memory at a time (the dashboard
+    this replaces kept every figure alive for the session, which is what
+    made the full comparison run too RAM-heavy to fit alongside the loaded
+    result data)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
-    refresh = st.sidebar.button("Reload from disk (ignore cache)")
-    algo_results = get_data(refresh=refresh)
+
+def main(refresh: bool = False, output_dir: str = PLOTS_ROOT):
+    algo_results = load_data(refresh=refresh)
 
     all_algos = sorted(algo_results)
-    if not all_algos:
-        st.warning(f"No data found under {RESULTS_ROOT}.")
+    if len(all_algos) < 2:
+        print(f"Need at least two algorithms with data under {RESULTS_ROOT}; found {all_algos}.")
         return
 
-    sel_algos = st.sidebar.multiselect("Algorithms to compare", all_algos, default=all_algos)
-    if len(sel_algos) < 2:
-        st.info("Select at least two algorithms to compare in the sidebar.")
-        return
-
-    problems = sorted({p for a in sel_algos for p in algo_results[a]})
-    sel_problems = st.sidebar.multiselect("Problem", problems, default=problems[:1])
-    if not sel_problems:
-        st.info("Select at least one problem in the sidebar.")
-        return
-
-    for problem in sel_problems:
-        st.header(problem)
-
-        noise_types = sorted({n for a in sel_algos for n in algo_results[a].get(problem, {})})
+    problems = sorted({p for a in all_algos for p in algo_results[a]})
+    for problem in problems:
+        noise_types = sorted({n for a in all_algos for n in algo_results[a].get(problem, {})})
         for noise_type in noise_types:
             stds = sorted(
-                {s for a in sel_algos for s in algo_results[a].get(problem, {}).get(noise_type, {})},
+                {s for a in all_algos for s in algo_results[a].get(problem, {}).get(noise_type, {})},
                 key=lambda s: float(s.removeprefix("std_")),
             )
 
             for std in stds:
-                series, meta = _build_comparison_series(algo_results, sel_algos, problem, noise_type, std)
+                series, meta = _build_comparison_series(algo_results, all_algos, problem, noise_type, std)
                 if len(series) < 2:
                     continue  # Nothing to compare for this group.
 
                 caption = ", ".join(f"{algo}={param} (n={n})" for algo, (param, n) in sorted(meta.items()))
                 label = f"{problem} · {noise_type} · {std}"
+                print(f"{label}  —  {caption}")
 
-                with st.expander(f"{noise_type} · {std}  —  {caption}"):
-                    hv_fig = create_hv_comparison_plot(series, title=f"{label} — Hypervolume")
-                    igd_fig = create_metric_comparison_plot(series, "igd_plus", "IGD+", title=f"{label} — IGD+")
-                    gd_fig = create_metric_comparison_plot(series, "gd_plus", "GD+", title=f"{label} — GD+")
+                group_dir = os.path.join(output_dir, problem, noise_type, std)
 
-                    cols = st.columns(3)
-                    for col, fig in zip(cols, (hv_fig, igd_fig, gd_fig)):
-                        col.pyplot(fig)
-                        plt.close(fig)
+                hv_fig = create_hv_comparison_plot(series, title=f"{label} — Hypervolume")
+                _save_and_close(hv_fig, os.path.join(group_dir, "hypervolume.png"))
+
+                igd_fig = create_metric_comparison_plot(series, "igd_plus", "IGD+", title=f"{label} — IGD+")
+                _save_and_close(igd_fig, os.path.join(group_dir, "igd_plus.png"))
+
+                gd_fig = create_metric_comparison_plot(series, "gd_plus", "GD+", title=f"{label} — GD+")
+                _save_and_close(gd_fig, os.path.join(group_dir, "gd_plus.png"))
+
+    print(f"Saved plots to {output_dir}")
 
 
 if __name__ == "__main__":
