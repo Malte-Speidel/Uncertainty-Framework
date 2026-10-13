@@ -154,6 +154,6 @@ class RTEA_Callback(Callback, LoggingMixin):
 
         noise_misinfo = np.sqrt(np.sum([CB_Resampling._minkowski_dist(noisy_values[i], noise_free_values[i])**2 for i in range(len(algorithm._archive))])/len(noisy_values))
 
-        print(f"Noise misinformation was calculated as {noise_misinfo}")
+        self.logger.debug(f"Noise misinformation was calculated as {noise_misinfo}")
 
         return noise_misinfo
