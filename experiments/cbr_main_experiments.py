@@ -65,8 +65,9 @@ def start_experiment(args: tuple):
 
     match algorithm:
         case "cbr":
-            assert type(parameters) == float, f"Selected algorithm was CBR_NSGA2 but parameter was not of type float. Supplied parameter {parameters}, type: {type(parameters)}."
-            algorithm_instance = CBR_NSGA2(resampling_threshold = parameters)
+            assert type(parameters) == tuple, f"Selected algorithm was CBR_NSGA2 but parameter was not of type tuple. Supplied parameter {parameters}, type: {type(parameters)}."
+            threshold, num_neighbors = parameters
+            algorithm_instance = CBR_NSGA2(resampling_threshold = threshold, num_neighbors = num_neighbors)
         case "mocba":
             assert type(parameters) == tuple, f"Selected algorithm was MOCBA NSGA2 but the supplied parameters were not a tuple. Supplied parameter {parameters}, type: {type(parameters)}."
             budget, init_repls = parameters
@@ -115,8 +116,8 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
 
     Args:
         algorithm (str): "cbr", "mocba" or "sr" -- same key used to select the algorithm.
-        parameters: Swept parameter(s) for `algorithm`: a float threshold (cbr), a
-            (budget, init_replications) int tuple (mocba), or an int k (sr).
+        parameters: Swept parameter(s) for `algorithm`: a (threshold, num_neighbors) tuple
+            (cbr), a (budget, init_replications) int tuple (mocba), or an int k (sr).
         problem (str): Problem name as a string.
         noise_type (str): Selected noise type.
         std (float): Standard deviation.
@@ -127,8 +128,9 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
     """
     match algorithm:
         case "cbr":
-            assert isinstance(parameters, float), f"cbr expects a float threshold, got {parameters!r}."
-            algo, param_dir = "cbr_nsga2", f"tau_{parameters:.3f}"
+            assert isinstance(parameters, tuple), f"cbr expects a (threshold, num_neighbors) tuple, got {parameters!r}."
+            threshold, num_neighbors = parameters
+            algo, param_dir = "cbr_nsga2", f"tau_{threshold:.3f}_nn_{num_neighbors}"
         case "mocba":
             assert isinstance(parameters, tuple), f"mocba expects a (budget, init_replications) tuple, got {parameters!r}."
             budget, init_repls = parameters

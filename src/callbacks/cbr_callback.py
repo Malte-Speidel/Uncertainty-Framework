@@ -77,6 +77,14 @@ class CBR_Callback(Callback, LoggingMixin):
     def save_data(self, data_path: str= f"{Path(__file__).resolve().parents[2]}/data/results.pkl", wipe_old_data = True):
         """Function that saves the current data of the callback to a predefined path.
 
+        Splits the data into two files: `data_path` gets everything the analysis
+        scripts actually read (clean_fronts, igd_plus, gd_plus, evaluations_per_gen,
+        re_evaluations, noise_misinfo), while "means" and "suggested_thresholds" --
+        full-population, per-generation arrays that dwarf everything else and that
+        neither main_analysis.py nor tau_sweep_analysis.py reads -- go to a sibling
+        "<stem>.extras.pkl" file. Nothing is discarded (no need to rerun experiments
+        to get them back later), but routine syncs of `data_path` alone stay small.
+
         Args:
             data_path (str, Path, optional): Path that leads to the data directory (where it should be created). Defaults to project_root/data.
             wipe_old_data (bool, optional): Decides if existing data gets wiped and new directory is created instead. Defaults to true.
@@ -92,11 +100,9 @@ class CBR_Callback(Callback, LoggingMixin):
         self.logger.debug(f"Creating data directory at {data_dir}")
         os.makedirs(data_dir, exist_ok = True)
 
-        # Create data dict
-        data_dict = {
+        # Core columns -- small, used by every analysis script.
+        core_dict = {
             "clean_fronts": self.clean_fronts,
-            "means": self.means,
-            "suggested_thresholds": self.suggested_thresholds,
             "re_evaluations": self.re_evaluations,
             "evaluations_per_gen": self.evaluations_per_gen,
             "igd_plus": self.igd_plus,
@@ -104,12 +110,19 @@ class CBR_Callback(Callback, LoggingMixin):
             "noise_misinfo": self.noise_misinfo
         }
 
-        # Make dataframe
-        frame = pd.DataFrame(data_dict)
+        # Extra columns -- full-population per-generation data, currently unused
+        # by analysis but kept around in case it's needed later.
+        extras_dict = {
+            "means": self.means,
+            "suggested_thresholds": self.suggested_thresholds,
+        }
 
-        # Save to pickle (and maybe CSV)
         with open(data_path, "wb") as f:
-            pickle.dump(obj = frame, file = f)
+            pickle.dump(obj = pd.DataFrame(core_dict), file = f)
+
+        extras_path = Path(data_path).parent / f"{Path(data_path).stem}.extras.pkl"
+        with open(extras_path, "wb") as f:
+            pickle.dump(obj = pd.DataFrame(extras_dict), file = f)
 
     def calculate_igd_plus(self, true_pf: np.ndarray, approx_pf) -> float:
         """Calculates the IGD+ between the true Pareto front and the approximated one.

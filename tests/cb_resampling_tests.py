@@ -26,7 +26,7 @@ class TestCbResampling(unittest.TestCase):
     
     def test_minkowski_manhattan(self):
         manhattan = CB_Resampling._minkowski_dist(self.x, self.y,p=1)
-        assert manhattan == 4, f"Minkowski manhattan distance should be 4, was {euclidean}"
+        assert manhattan == 4, f"Minkowski manhattan distance should be 4, was {manhattan}"
 
 if __name__ == "__main__":
     unittest.main()

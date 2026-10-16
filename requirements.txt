@@ -1,5 +1,6 @@
 pymoo
 numpy
+scipy
 pandas
 matplotlib
 plotly

@@ -104,7 +104,8 @@ class RTEA_Callback(Callback, LoggingMixin):
             "re_evaluations": self.re_evaluations,
             "evaluations_per_gen": self.evaluations_per_gen,
             "igd_plus": self.igd_plus,
-            "gd_plus": self.gd_plus
+            "gd_plus": self.gd_plus,
+            "noise_misinfo": self.noise_misinfo
         }
 
         # Make dataframe

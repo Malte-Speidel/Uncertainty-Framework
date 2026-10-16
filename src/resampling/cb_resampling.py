@@ -23,7 +23,7 @@ class CB_Resampling(LoggingMixin):
     """Class that contains the resampling methods."""
 
     @staticmethod
-    def resample(algo_instance: Algorithm, dynamic_threshold: bool = True, threshold: np.ndarray = None, num_neighbors: int = 5, **kwargs):
+    def resample(algo_instance: Algorithm, dynamic_threshold: bool = True, threshold: np.ndarray = None, num_neighbors: int = 5, method: str = "neighbors", **kwargs):
         """Takes an algorithm instance and applies confidence bound resampling to its individuals.
 
         Args:
@@ -31,16 +31,17 @@ class CB_Resampling(LoggingMixin):
             dynamic_threshold (bool, optional): Decides if fixed or dynamic threshold is used. Defaults to True.
             threshold (np.ndarray, optional): Threshold for which to re-evaluate (ind.uncertainty >= threshold -> re-eval). Defaults to None.
             num_neighbors (int, optional): Number of neighbors used to determine T in UCB formula. Defaults to 5.
+            method (str, optional): Method to calculate T in UCB formula. Options: "neighbors" or "population". Defaults to "neighbors".
         """
         CB_Resampling.logger.debug("Starting population resampling.")
 
         if dynamic_threshold:
             # Calculate threshold
             dyn_threshold = CB_Resampling._calc_threshold(algo_instance = algo_instance, method = "population")
-            CB_Resampling._threshold_resampling(algo_instance=algo_instance, threshold = dyn_threshold, num_neighbors=num_neighbors)
+            CB_Resampling._threshold_resampling(algo_instance=algo_instance, threshold = dyn_threshold, num_neighbors=num_neighbors, method=method)
         else:
             # Use fixed threshold
-            CB_Resampling._threshold_resampling(algo_instance = algo_instance, threshold = threshold, num_neighbors=num_neighbors)
+            CB_Resampling._threshold_resampling(algo_instance = algo_instance, threshold = threshold, num_neighbors=num_neighbors, method=method)
 
 
     @staticmethod
@@ -65,13 +66,14 @@ class CB_Resampling(LoggingMixin):
                 ind.F = ind.mean
 
     @staticmethod
-    def _threshold_resampling(algo_instance: Algorithm, threshold: np.ndarray, num_neighbors: int = 5):
+    def _threshold_resampling(algo_instance: Algorithm, threshold: np.ndarray, num_neighbors: int = 5, method: str = "neighbors"):
         """Re-evaluates individuals that are over the specified threshold.
 
         Args:
             algo_instance (Algorithm): Instance of the pymoo genetic algorithm.
             threshold (np.ndarray): Threshold for which to re-evaluate (ind.uncertainty >= threshold -> re-eval)
             num_neighbors (int, optional): Number of neighbors used to determine T in UCB formula. Defaults to 5.
+            method (str, optional): Method to calculate T in UCB formula. Options: "neighbors", "population", or "generation". Defaults to "neighbors".
         """
 
         CB_Resampling.logger.debug("Applying CB resampling.")
@@ -81,16 +83,26 @@ class CB_Resampling(LoggingMixin):
 
         assert algo_instance.pop is not None, f"Population of {algo_instance.__class__.__name__} was None but should not have been."
 
-        pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors)
-
         # Calculate T values and the indicator value --> Decide if resampling is necessary
-        for knn in pop_knn:
-            T = 0
-            ind = knn[0]
-            for neighbor in knn[1]:
-                T += neighbor.n_evals
+        for i, ind in enumerate(algo_instance.pop):
+            # Get neighbor information only when needed
+            match method:
+                case "neighbors":
+                    pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors)
+                    knn = pop_knn[i]  # Get corresponding neighbor data
+                    T = knn[2]  # Use the pre-calculated neighbor sum from _knn
+                case "population":
+                    T = CB_Resampling._get_total_evals(algo_instance.pop)
+                case "generation":
+                    T = algo_instance.evaluator.n_eval
+                case _:
+                    # Default to neighbors if method is not recognized
+                    pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors)
+                    knn = pop_knn[i]  # Get corresponding neighbor data
+                    T = knn[2]  # Use the pre-calculated neighbor sum from _knn
+                
             CB_Resampling.logger.debug(f"T value: {T}")
-            uncertainty_indicator = np.sqrt(2*np.log(T)/knn[0].n_evals)
+            uncertainty_indicator = np.sqrt(2*np.log(T)/ind.n_evals)
 
             CB_Resampling.logger.debug(f"Calculated uncertainty indicator: {uncertainty_indicator}")
 
@@ -162,14 +174,16 @@ class CB_Resampling(LoggingMixin):
         """
 
         CB_Resampling.logger.debug(f"Calculating KNN for population of size {len(pop)}.")
-
+        
+        # Store the neighbor sums and return them along with individuals
+        neighbors_with_sums = []
+        
         means = np.array([ind.mean for ind in pop])
         f_min = means.min(axis=0)
         f_range = means.max(axis=0) - f_min
         f_range[f_range == 0] = 1.0  # Flat objective: every individual is equal on it, so it contributes 0 distance either way.
         normed_means = (means - f_min) / f_range
 
-        neighbors = []
         for i, ind in enumerate(pop):
             distances = []
             for j, ind2 in enumerate(pop):
@@ -180,9 +194,28 @@ class CB_Resampling(LoggingMixin):
             # Sort based on distance to ind
             distances.sort(key=lambda x: x[1])
 
-            # Add to neighbors
-            neighbors.append([ind, [d[0] for d in distances[:k]]]) # Only append individual not the distance
-        return neighbors
+            # Add to neighbors and calculate neighbor sum for this individual
+            neighbor_individuals = [d[0] for d in distances[:k]]
+            neighbor_sum = sum(neighbor.n_evals for neighbor in neighbor_individuals)
+            
+            neighbors_with_sums.append([ind, neighbor_individuals, neighbor_sum]) # Store the sum as well
+            
+        return neighbors_with_sums
+
+    @staticmethod
+    def _get_total_evals(pop: Population):
+        """Sums the total evaluations of the current population.
+
+        Args:
+            pop (Population): Population to sum up
+
+        Returns:
+            int: Total number of evaluations of the population
+        """
+
+        evaluations = np.sum([ind.n_evals for ind in pop])
+        return int(evaluations)
+
 
     @staticmethod
     def _calc_threshold(algo_instance: Algorithm, method: str = "population") -> np.ndarray:
