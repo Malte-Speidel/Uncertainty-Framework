@@ -7,4 +7,3 @@ plotly
 numba
 pyarrow
 fastparquet
-streamlit
