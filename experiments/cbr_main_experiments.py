@@ -68,6 +68,9 @@ def start_experiment(args: tuple):
             assert type(parameters) == tuple, f"Selected algorithm was CBR_NSGA2 but parameter was not of type tuple. Supplied parameter {parameters}, type: {type(parameters)}."
             threshold, num_neighbors = parameters
             algorithm_instance = CBR_NSGA2(resampling_threshold = threshold, num_neighbors = num_neighbors)
+        case "cbr_population" | "cbr_generation":
+            assert type(parameters) == float, f"Selected algorithm was CBR_NSGA2 with the population/generation method but parameter was not of type float. Supplied parameter {parameters}, type: {type(parameters)}."
+            algorithm_instance = CBR_NSGA2(resampling_threshold = parameters, method = algorithm.removeprefix("cbr_"))
         case "mocba":
             assert type(parameters) == tuple, f"Selected algorithm was MOCBA NSGA2 but the supplied parameters were not a tuple. Supplied parameter {parameters}, type: {type(parameters)}."
             budget, init_repls = parameters
@@ -131,6 +134,9 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
             assert isinstance(parameters, tuple), f"cbr expects a (threshold, num_neighbors) tuple, got {parameters!r}."
             threshold, num_neighbors = parameters
             algo, param_dir = "cbr_nsga2", f"tau_{threshold:.3f}_nn_{num_neighbors}"
+        case "cbr_population" | "cbr_generation":
+            assert isinstance(parameters, float), f"{algorithm} expects a float threshold, got {parameters!r}."
+            algo, param_dir = "cbr_nsga2", f"tau_{parameters:.3f}_{algorithm.removeprefix('cbr_')}"
         case "mocba":
             assert isinstance(parameters, tuple), f"mocba expects a (budget, init_replications) tuple, got {parameters!r}."
             budget, init_repls = parameters
@@ -157,7 +163,7 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "sr", "mocba", "rtea"])
+    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "cbr_population", "cbr_generation", "sr", "mocba", "rtea"])
     parser.add_argument("--noise_level", type=int, required=True, choices=[0, 1, 2, 3, 4, 5])
     parser.add_argument("--problem", type=str, required=True, choices=['NZDT1', 'NZDT2', 'NZDT3', 'NZDT4', 'NZDT6', 'NDTLZ1', 'NDTLZ2', 'NDTLZ3', 'NDTLZ7'])
 
