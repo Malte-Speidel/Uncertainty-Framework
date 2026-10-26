@@ -83,24 +83,23 @@ class CB_Resampling(LoggingMixin):
 
         assert algo_instance.pop is not None, f"Population of {algo_instance.__class__.__name__} was None but should not have been."
 
+        if method not in ("neighbors", "population", "generation"):
+            method = "neighbors"
+
+        # _knn computes neighbor data for the whole population in one pass, so it's
+        # only ever called once per generation here, not once per individual.
+        pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors) if method == "neighbors" else None
+
         # Calculate T values and the indicator value --> Decide if resampling is necessary
         for i, ind in enumerate(algo_instance.pop):
-            # Get neighbor information only when needed
             match method:
                 case "neighbors":
-                    pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors)
-                    knn = pop_knn[i]  # Get corresponding neighbor data
-                    T = knn[2]  # Use the pre-calculated neighbor sum from _knn
+                    T = pop_knn[i][2]  # Use the pre-calculated neighbor sum from _knn
                 case "population":
                     T = CB_Resampling._get_total_evals(algo_instance.pop)
                 case "generation":
                     T = algo_instance.evaluator.n_eval
-                case _:
-                    # Default to neighbors if method is not recognized
-                    pop_knn = CB_Resampling._knn(pop = algo_instance.pop, k = num_neighbors)
-                    knn = pop_knn[i]  # Get corresponding neighbor data
-                    T = knn[2]  # Use the pre-calculated neighbor sum from _knn
-                
+
             CB_Resampling.logger.debug(f"T value: {T}")
             uncertainty_indicator = np.sqrt(2*np.log(T)/ind.n_evals)
 
