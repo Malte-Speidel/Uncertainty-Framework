@@ -11,6 +11,9 @@ from src.algorithms.resampling_adaptations.cbr_nsga2 import CBR_NSGA2
 from src.algorithms.resampling_adaptations.mocba_nsga2 import MOCBA_NSGA2
 from src.algorithms.resampling_adaptations.static_res_nsga2 import SR_NSGA2
 from src.algorithms.resampling_adaptations.rtea import RTEA
+from src.algorithms.resampling_adaptations.cbr_nsga3 import CBR_NSGA3
+from src.algorithms.resampling_adaptations.mocba_nsga3 import MOCBA_NSGA3
+from src.algorithms.resampling_adaptations.static_res_nsga3 import SR_NSGA3
 from src.callbacks.cbr_callback import CBR_Callback
 from src.callbacks.rtea_callback import RTEA_Callback
 from src.problems.noisy_zdt import *
@@ -81,6 +84,17 @@ def start_experiment(args: tuple):
         case "rtea":
             assert type(parameters) == int, f"Selected algorithm was RTEA but the supplied parameter was not of type int."
             algorithm_instance = RTEA(archive_resamples=parameters)
+        case "cbr_nsga3":
+            assert type(parameters) == tuple, f"Selected algorithm was CBR_NSGA3 but parameter was not of type tuple. Supplied parameter {parameters}, type: {type(parameters)}."
+            threshold, num_neighbors = parameters
+            algorithm_instance = CBR_NSGA3(resampling_threshold = threshold, num_neighbors = num_neighbors)
+        case "mocba_nsga3":
+            assert type(parameters) == tuple, f"Selected algorithm was MOCBA NSGA3 but the supplied parameters were not a tuple. Supplied parameter {parameters}, type: {type(parameters)}."
+            budget, init_repls = parameters
+            algorithm_instance = MOCBA_NSGA3(init_replications=init_repls, resampling_budget=budget)
+        case "sr_nsga3":
+            assert type(parameters) == int, f"Selected algorithm was Static Resampling NSGA3 but supplied parameter was not of type int. Supplied parameter {parameters}, type: {type(parameters)}."
+            algorithm_instance = SR_NSGA3(k = parameters)
         case _: raise ValueError(f"Supplied algorithm name did not match implemented algorithms. Supplied algorihm name '{algorithm}'.")
 
     assert algorithm_instance is not None, f"Algorithm instance was None after algorithm should have been selected. Supplied name '{algorithm}'."
@@ -147,6 +161,17 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
         case "rtea":
             assert isinstance(parameters, int), f"rtea expects k, got {parameters!r}"
             algo, param_dir = "rtea", f"k_{parameters:03d}"
+        case "cbr_nsga3":
+            assert isinstance(parameters, tuple), f"cbr_nsga3 expects a (threshold, num_neighbors) tuple, got {parameters!r}."
+            threshold, num_neighbors = parameters
+            algo, param_dir = "cbr_nsga3", f"tau_{threshold:.3f}_nn_{num_neighbors}"
+        case "mocba_nsga3":
+            assert isinstance(parameters, tuple), f"mocba_nsga3 expects a (budget, init_replications) tuple, got {parameters!r}."
+            budget, init_repls = parameters
+            algo, param_dir = "mocba_nsga3", f"budget_{budget:04d}_r{init_repls:02d}"
+        case "sr_nsga3":
+            assert isinstance(parameters, int), f"sr_nsga3 expects an int k, got {parameters!r}."
+            algo, param_dir = "sr_nsga3", f"k_{parameters:03d}"
         case _:
             raise ValueError(f"Supplied algorithm name did not match implemented algorithms. Supplied algorithm name '{algorithm}'.")
 
@@ -163,7 +188,7 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "cbr_population", "cbr_generation", "sr", "mocba", "rtea"])
+    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "cbr_population", "cbr_generation", "sr", "mocba", "rtea", "cbr_nsga3", "sr_nsga3", "mocba_nsga3"])
     parser.add_argument("--noise_level", type=int, required=True, choices=[0, 1, 2, 3, 4, 5])
     parser.add_argument("--problem", type=str, required=True, choices=['NZDT1', 'NZDT2', 'NZDT3', 'NZDT4', 'NZDT6', 'NDTLZ1', 'NDTLZ2', 'NDTLZ3', 'NDTLZ7'])
 
