@@ -88,6 +88,9 @@ def start_experiment(args: tuple):
             assert type(parameters) == tuple, f"Selected algorithm was CBR_NSGA3 but parameter was not of type tuple. Supplied parameter {parameters}, type: {type(parameters)}."
             threshold, num_neighbors = parameters
             algorithm_instance = CBR_NSGA3(resampling_threshold = threshold, num_neighbors = num_neighbors)
+        case "cbr_nsga3_population" | "cbr_nsga3_generation":
+            assert type(parameters) == float, f"Selected algorithm was CBR_NSGA3 with the population/generation method but parameter was not of type float. Supplied parameter {parameters}, type: {type(parameters)}."
+            algorithm_instance = CBR_NSGA3(resampling_threshold = parameters, method = algorithm.removeprefix("cbr_nsga3_"))
         case "mocba_nsga3":
             assert type(parameters) == tuple, f"Selected algorithm was MOCBA NSGA3 but the supplied parameters were not a tuple. Supplied parameter {parameters}, type: {type(parameters)}."
             budget, init_repls = parameters
@@ -165,6 +168,9 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
             assert isinstance(parameters, tuple), f"cbr_nsga3 expects a (threshold, num_neighbors) tuple, got {parameters!r}."
             threshold, num_neighbors = parameters
             algo, param_dir = "cbr_nsga3", f"tau_{threshold:.3f}_nn_{num_neighbors}"
+        case "cbr_nsga3_population" | "cbr_nsga3_generation":
+            assert isinstance(parameters, float), f"{algorithm} expects a float threshold, got {parameters!r}."
+            algo, param_dir = "cbr_nsga3", f"tau_{parameters:.3f}_{algorithm.removeprefix('cbr_nsga3_')}"
         case "mocba_nsga3":
             assert isinstance(parameters, tuple), f"mocba_nsga3 expects a (budget, init_replications) tuple, got {parameters!r}."
             budget, init_repls = parameters
@@ -188,7 +194,7 @@ def _result_dir(algorithm: str, parameters, problem: str, noise_type: str, std: 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "cbr_population", "cbr_generation", "sr", "mocba", "rtea", "cbr_nsga3", "sr_nsga3", "mocba_nsga3"])
+    parser.add_argument("--algo", type=str, required=True, choices=["cbr", "cbr_population", "cbr_generation", "sr", "mocba", "rtea", "cbr_nsga3", "sr_nsga3", "mocba_nsga3", "cbr_nsga3_population", "cbr_nsga3_generation"])
     parser.add_argument("--noise_level", type=int, required=True, choices=[0, 1, 2, 3, 4, 5])
     parser.add_argument("--problem", type=str, required=True, choices=['NZDT1', 'NZDT2', 'NZDT3', 'NZDT4', 'NZDT6', 'NDTLZ1', 'NDTLZ2', 'NDTLZ3', 'NDTLZ7'])
 
